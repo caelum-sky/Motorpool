@@ -1,0 +1,31 @@
+/* src/index.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* BukSU brand CSS variables (mirrors tailwind.config.js) */
+:root {
+  --color-maroon:       #7B1C1C;
+  --color-maroon-dark:  #5A1313;
+  --color-maroon-light: #A52828;
+  --color-gold:         #C9A227;
+  --color-gold-light:   #E8C255;
+  --color-cream:        #FDF6E3;
+}
+
+/* Smooth scrolling */
+html { scroll-behavior: smooth; }
+
+/* Remove default number input arrows */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
+input[type="number"] { -moz-appearance: textfield; }
+
+/* Custom scrollbar (webkit) */
+::-webkit-scrollbar       { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #f1f1f1; }
+::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+
+/* Transition defaults */
+*, *::before, *::after { box-sizing: border-box; }
