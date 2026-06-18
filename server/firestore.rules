@@ -1,0 +1,71 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper: the calling user's role, looked up once per rule evaluation.
+    function callerRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdminOrMotorpool() {
+      return isSignedIn() && callerRole() in ['admin', 'motorpool'];
+    }
+
+    function isAdminMotorpoolOrDriver() {
+      return isSignedIn() && callerRole() in ['admin', 'motorpool', 'driver'];
+    }
+
+    // ── USERS ──────────────────────────────────────────────────────────────
+    // Anyone signed in can read the user list (needed for driver dropdowns,
+    // displaying requestor names, etc). A user can always write their own
+    // profile (e.g. self-registration). Admins can write anyone's profile
+    // (role changes from the Users page).
+    match /users/{uid} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.auth.uid == uid;
+      allow update, delete: if isSignedIn() && (request.auth.uid == uid || callerRole() == 'admin');
+    }
+
+    // ── VEHICLES ───────────────────────────────────────────────────────────
+    // Admin, motorpool, and driver can all fully manage vehicles.
+    match /vehicles/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdminMotorpoolOrDriver();
+    }
+
+    // ── INVENTORY (parts, tools, fuel, equipment) ─────────────────────────
+    match /inventory/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdminMotorpoolOrDriver();
+    }
+
+    match /issuance_logs/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdminMotorpoolOrDriver();
+    }
+
+    // ── TRIP TICKETS ───────────────────────────────────────────────────────
+    // Anyone signed in can read (the app filters by role client-side for
+    // staff/driver views). Any signed-in user can create their own request.
+    // Updating (approve/reject/assign) stays with admin/motorpool. Drivers
+    // need to update their OWN assigned ticket to accept/decline/complete it.
+    match /trip_tickets/{id} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update: if isAdminOrMotorpool()
+                    || (isSignedIn() && callerRole() == 'driver'
+                        && request.auth.uid in resource.data.driverIds);
+      allow delete: if isAdminOrMotorpool();
+    }
+
+    // ── MAINTENANCE / JOB ORDERS ───────────────────────────────────────────
+    match /maintenance_logs/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdminMotorpoolOrDriver();
+    }
+  }
+}

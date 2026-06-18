@@ -7,7 +7,7 @@ import {
   collection, doc, addDoc, getDoc, getDocs, updateDoc, deleteDoc,
   query, where, orderBy, limit, serverTimestamp, runTransaction,
 } from "firebase/firestore";
-import { db } from "./firebase";
+import { db, auth as clientAuth } from "./firebase";
 
 const col  = (name)     => collection(db, name);
 const ref  = (name, id) => doc(db, name, id);
@@ -19,6 +19,27 @@ function normalize(data) {
     out[k] = (v && typeof v.toDate === "function") ? v.toDate().toISOString() : v;
   }
   return out;
+}
+
+/**
+ * authedFetch — calls the Express backend with the current user's
+ * Firebase ID token attached. Used for operations that require the
+ * Admin SDK (creating accounts for others) or server-side business
+ * logic (conflict checking, sending emails).
+ */
+async function authedFetch(path, options = {}) {
+  const token = await clientAuth.currentUser.getIdToken();
+  const res = await fetch(`/api${path}`, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+      ...(options.headers || {}),
+    },
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Request failed");
+  return data;
 }
 
 // ── VEHICLES ──────────────────────────────────────────────────────────────────
@@ -126,11 +147,14 @@ export const inventoryApi = {
 };
 
 // ── TRIP TICKETS ──────────────────────────────────────────────────────────────
+// Reads happen via Firestore directly (fast, live). Writes that need
+// conflict-checking or email notifications go through the Express
+// backend, which owns that business logic.
 export const tripsApi = {
   async getAll(userProfile) {
     let q;
     if (userProfile.role === "driver") {
-      q = query(col("trip_tickets"), where("driverId", "==", userProfile.uid), orderBy("createdAt", "desc"), limit(100));
+      q = query(col("trip_tickets"), where("driverIds", "array-contains", userProfile.uid), orderBy("createdAt", "desc"), limit(100));
     } else if (userProfile.role === "staff") {
       q = query(col("trip_tickets"), where("requestorId", "==", userProfile.uid), orderBy("createdAt", "desc"), limit(100));
     } else {
@@ -139,46 +163,73 @@ export const tripsApi = {
     const s = await getDocs(q);
     return s.docs.map(d => normalize(snap(d)));
   },
+
+  async getOne(id) {
+    const d = await getDoc(ref("trip_tickets", id));
+    return d.exists() ? normalize(snap(d)) : null;
+  },
+
+  /** checkConflicts — call before submit/approve to warn the user early. */
+  async checkConflicts({ dateTravel, timeDepart, timeReturn, assignments, excludeTicketId }) {
+    return authedFetch("/trips/check-conflicts", {
+      method: "POST",
+      body: JSON.stringify({ dateTravel, timeDepart, timeReturn, assignments, excludeTicketId }),
+    });
+  },
+
+  /** create — submits a new trip request. Requires passengers[] and numberOfVehicles. */
   async create(data, userProfile) {
-    const payload = {
-      requestorId: userProfile.uid, requestorName: userProfile.name || userProfile.email,
-      requestorDept: userProfile.officeDepartment || "",
-      destination: data.destination, purpose: data.purpose, dateTravel: data.dateTravel,
-      timeDepart: data.timeDepart || "", timeReturn: data.timeReturn || "",
-      passengers: data.passengers || [], vehiclePreference: data.vehiclePreference || null,
-      vehicleId: null, driverId: null, driverName: null,
-      startKM: null, endKM: null, fuelConsumed: null,
-      remarks: data.remarks || "", status: "pending",
-      approvedBy: null, approvedAt: null, completedAt: null,
-      createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
-    };
-    const r = await addDoc(col("trip_tickets"), payload);
-    return { id: r.id, ...payload };
-  },
-  async approve(id, { vehicleId, driverId, driverName }, approvedByUid) {
-    await updateDoc(ref("vehicles", vehicleId), { conditionStatus: "dispatched", updatedAt: serverTimestamp() });
-    await updateDoc(ref("trip_tickets", id), {
-      vehicleId, driverId, driverName: driverName || "", status: "approved",
-      approvedBy: approvedByUid, approvedAt: serverTimestamp(), updatedAt: serverTimestamp(),
+    return authedFetch("/trips", {
+      method: "POST",
+      body: JSON.stringify({
+        destination:      data.destination,
+        purpose:           data.purpose,
+        dateTravel:        data.dateTravel,
+        timeDepart:        data.timeDepart || "",
+        timeReturn:        data.timeReturn || "",
+        passengers:        data.passengers || [],
+        numberOfVehicles:  data.numberOfVehicles || 1,
+        remarks:           data.remarks || "",
+        requestorEmail:    userProfile.email || "",
+      }),
     });
   },
+
+  /** approve — assigns one or more {vehicleId, driverId, driverName} pairs. */
+  async approve(id, assignments) {
+    return authedFetch(`/trips/${id}/approve`, {
+      method: "PATCH",
+      body: JSON.stringify({ assignments }),
+    });
+  },
+
   async complete(id, { startKM, endKM }) {
-    const start = Number(startKM), end = Number(endKM);
-    if (end < start) throw new Error("End KM must be ≥ Start KM");
-    const ticketDoc = await getDoc(ref("trip_tickets", id));
-    const { vehicleId } = ticketDoc.data();
-    if (vehicleId) {
-      await updateDoc(ref("vehicles", vehicleId), { currentOdometer: end, conditionStatus: "available", updatedAt: serverTimestamp() });
-    }
-    await updateDoc(ref("trip_tickets", id), {
-      startKM: start, endKM: end, fuelConsumed: end - start,
-      status: "completed", completedAt: serverTimestamp(), updatedAt: serverTimestamp(),
+    return authedFetch(`/trips/${id}/complete`, {
+      method: "PATCH",
+      body: JSON.stringify({ startKM, endKM }),
     });
-    return { distanceTraveled: end - start };
   },
+
   async reject(id, reason) {
-    await updateDoc(ref("trip_tickets", id), { status: "rejected", remarks: reason || "", updatedAt: serverTimestamp() });
+    return authedFetch(`/trips/${id}/reject`, {
+      method: "PATCH",
+      body: JSON.stringify({ reason }),
+    });
   },
+
+  /** accept — driver acknowledges they'll take an assigned trip. */
+  async accept(id) {
+    return authedFetch(`/trips/${id}/accept`, { method: "PATCH" });
+  },
+
+  /** decline — driver flags they can't take an assigned trip; motorpool must reassign. */
+  async decline(id, reason) {
+    return authedFetch(`/trips/${id}/decline`, {
+      method: "PATCH",
+      body: JSON.stringify({ reason }),
+    });
+  },
+
   async delete(id) {
     await deleteDoc(ref("trip_tickets", id));
   },
@@ -236,27 +287,22 @@ export const maintenanceApi = {
 // Reading/updating roles can go straight to Firestore (client SDK).
 // CREATING a new Auth account for someone else requires the Admin SDK,
 // so that one call goes through the Express backend instead.
-import { auth as clientAuth } from "./firebase";
-
-async function authedFetch(path, options = {}) {
-  const token = await clientAuth.currentUser.getIdToken();
-  const res = await fetch(`/api${path}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-      ...(options.headers || {}),
-    },
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || "Request failed");
-  return data;
-}
 
 export const usersApi = {
   async getAll() {
     const s = await getDocs(col("users"));
-    return s.docs.map(d => normalize(snap(d)));
+    // Guarantee every user object has `uid` set to the Firestore doc ID,
+    // regardless of whether `uid` was also separately stored as a data
+    // field (it should always equal the doc ID, but older/inconsistent
+    // records may be missing it — this normalizes that).
+    return s.docs.map(d => ({ uid: d.id, ...normalize(d.data()) }));
+  },
+
+  /** getDrivers — fetches only users with role "driver", for assignment dropdowns. */
+  async getDrivers() {
+    const q = query(col("users"), where("role", "==", "driver"));
+    const s = await getDocs(q);
+    return s.docs.map(d => ({ uid: d.id, ...normalize(d.data()) }));
   },
 
   async updateRole(uid, role) {

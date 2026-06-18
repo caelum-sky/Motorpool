@@ -33,7 +33,7 @@ export default function DashboardPage() {
         <div className="flex justify-center py-20"><Spinner size="lg" /></div>
       ) : (
         <>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <StatCard label="Total Fleet"    value={v.length}         icon={Truck}         color="maroon" sub={`${v.filter(x=>x.conditionStatus==="available").length} available`} />
             <StatCard label="Pending Trips"  value={pending.length}   icon={Clock}         color="orange" sub="awaiting approval" />
             <StatCard label="Low Stock Items"value={lowStock.length}  icon={AlertTriangle} color={lowStock.length>0?"red":"green"} sub={lowStock.length>0?"reorder needed":"stock OK"} />

@@ -23,8 +23,14 @@ export default function ProtectedRoute({ roles }) {
 
   if (!user) return <Navigate to="/login" replace />;
 
-  if (roles && userProfile && !roles.includes(userProfile.role)) {
-    return <Navigate to="/unauthorized" replace />;
+  // If a role restriction applies, we must have a resolved profile to check
+  // against. Rendering the protected page while userProfile is still null
+  // would mean ANY signed-in user briefly sees admin-only content — so we
+  // fail CLOSED (redirect) rather than open (render) whenever we can't yet
+  // confirm the role, not just when we've confirmed it's wrong.
+  if (roles) {
+    if (!userProfile) return <Navigate to="/unauthorized" replace />;
+    if (!roles.includes(userProfile.role)) return <Navigate to="/unauthorized" replace />;
   }
 
   return <Outlet />;

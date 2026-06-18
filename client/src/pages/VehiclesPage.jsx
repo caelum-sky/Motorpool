@@ -24,7 +24,7 @@ export default function VehiclesPage() {
   const [saving,  setSaving]                   = useState(false);
   const [confirm, setConfirm]                  = useState(null); // id to delete
 
-  const canEdit = ["admin","motorpool"].includes(userProfile?.role);
+  const canEdit = ["admin","motorpool","driver"].includes(userProfile?.role);
 
   const filtered = (vehicles||[]).filter(v => {
     const m = !search || [v.plateNumber,v.brand,v.model,v.type].some(f=>f?.toLowerCase().includes(search.toLowerCase()));

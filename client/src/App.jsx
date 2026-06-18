@@ -12,6 +12,7 @@ import DashboardPage    from "./pages/DashboardPage";
 import VehiclesPage     from "./pages/VehiclesPage";
 import InventoryPage    from "./pages/InventoryPage";
 import TripTicketsPage  from "./pages/TripTicketsPage";
+import CalendarPage     from "./pages/CalendarPage";
 import MaintenancePage  from "./pages/MaintenancePage";
 import UsersPage        from "./pages/UsersPage";
 
@@ -46,9 +47,10 @@ export default function App() {
               <Route path="/dashboard"   element={<DashboardPage />} />
               <Route path="/vehicles"    element={<VehiclesPage />} />
               <Route path="/trips"       element={<TripTicketsPage />} />
+              <Route path="/calendar"    element={<CalendarPage />} />
 
-              {/* Admin + Motorpool only */}
-              <Route element={<ProtectedRoute roles={["admin", "motorpool"]} />}>
+              {/* Admin + Motorpool + Driver */}
+              <Route element={<ProtectedRoute roles={["admin", "motorpool", "driver"]} />}>
                 <Route path="/inventory"   element={<InventoryPage />} />
                 <Route path="/maintenance" element={<MaintenancePage />} />
               </Route>

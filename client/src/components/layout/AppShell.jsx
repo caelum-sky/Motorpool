@@ -1,5 +1,12 @@
 // src/components/layout/AppShell.jsx
 // Main layout: sidebar + top bar + content area.
+//
+// Responsive behavior:
+//   - Desktop (md+): sidebar is fixed and pushes content via margin-left.
+//     Collapse toggle shrinks it to icon-only width.
+//   - Mobile (below md): sidebar becomes an off-canvas drawer with zero
+//     content margin; a hamburger button in the top bar opens it over a
+//     backdrop instead of squeezing the page.
 
 import { useState } from "react";
 import { Outlet }   from "react-router-dom";
@@ -8,35 +15,42 @@ import { useAuth }   from "../../context/AuthContext";
 import { Bell, Menu } from "lucide-react";
 
 export default function AppShell() {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed,   setCollapsed]   = useState(false);
+  const [mobileOpen,  setMobileOpen]  = useState(false);
   const { userProfile } = useAuth();
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">
-      <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)} />
+      <Sidebar
+        collapsed={collapsed}
+        onToggle={() => setCollapsed((c) => !c)}
+        mobileOpen={mobileOpen}
+        onCloseMobile={() => setMobileOpen(false)}
+      />
 
-      {/* Main content */}
+      {/* Main content — no left margin on mobile (sidebar is off-canvas),
+          responds to collapsed state on desktop */}
       <div
-        className={`flex flex-col flex-1 transition-all duration-200 ${collapsed ? "ml-16" : "ml-60"}`}
+        className={`flex flex-col flex-1 min-w-0 transition-all duration-200 ${collapsed ? "md:ml-16" : "md:ml-60"}`}
       >
         {/* Top bar */}
-        <header className="h-14 bg-white border-b border-gray-200 flex items-center justify-between px-6 shadow-sm flex-shrink-0">
-          <div className="flex items-center gap-3">
+        <header className="h-14 bg-white border-b border-gray-200 flex items-center justify-between px-3 sm:px-6 shadow-sm flex-shrink-0">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <button
-              onClick={() => setCollapsed((c) => !c)}
-              className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 md:hidden"
+              onClick={() => setMobileOpen(true)}
+              className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 md:hidden flex-shrink-0"
             >
               <Menu className="w-5 h-5" />
             </button>
-            <div>
-              <p className="text-xs text-gray-400">Bukidnon State University</p>
-              <p className="text-sm font-semibold text-gray-700">
-                Physical Plant & Maintenance Unit — Motorpool Section
+            <div className="min-w-0">
+              <p className="text-xs text-gray-400 truncate hidden sm:block">Bukidnon State University</p>
+              <p className="text-xs sm:text-sm font-semibold text-gray-700 truncate">
+                <span className="hidden sm:inline">Physical Plant & Maintenance Unit — </span>Motorpool Section
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
             <button className="relative p-2 rounded-lg hover:bg-gray-100 text-gray-500">
               <Bell className="w-5 h-5" />
               {/* Notification dot — wire up to real data when needed */}
@@ -46,14 +60,14 @@ export default function AppShell() {
               <p className="text-sm font-medium text-gray-700">{userProfile?.name || "User"}</p>
               <p className="text-xs text-gray-400 capitalize">{userProfile?.role}</p>
             </div>
-            <div className="w-8 h-8 rounded-full bg-buksu-maroon text-white flex items-center justify-center text-sm font-bold">
+            <div className="w-8 h-8 rounded-full bg-buksu-maroon text-white flex items-center justify-center text-sm font-bold flex-shrink-0">
               {(userProfile?.name || "U")[0].toUpperCase()}
             </div>
           </div>
         </header>
 
         {/* Page content */}
-        <main className="flex-1 overflow-y-auto p-6">
+        <main className="flex-1 overflow-y-auto p-3 sm:p-6">
           <Outlet />
         </main>
       </div>

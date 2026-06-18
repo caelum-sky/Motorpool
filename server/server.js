@@ -49,7 +49,55 @@ app.use((err, _req, res, _next) => {
 });
 
 // ── Start ─────────────────────────────────────────────────────────────────────
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`\n🚐  BukSU Motorpool API running on http://localhost:${PORT}`);
   console.log(`    Health check: http://localhost:${PORT}/api/health\n`);
+
+  // Warn early if this machine's clock is drifted — this can cause
+  // "UNAUTHENTICATED" errors from Firebase token verification.
+  try {
+    const res = await fetch("https://www.google.com", { method: "HEAD" });
+    const serverHeaderDate = new Date(res.headers.get("date"));
+    const localDate = new Date();
+    const driftMs = Math.abs(localDate - serverHeaderDate);
+
+    if (driftMs > 60_000) {
+      console.warn(
+        `⚠️   SYSTEM CLOCK WARNING: your computer's clock differs from real time by ~${Math.round(driftMs / 1000)}s.\n` +
+        `     Local time:  ${localDate.toISOString()}\n` +
+        `     Real time:   ${serverHeaderDate.toISOString()}\n` +
+        `     This WILL cause "Unauthorized" / "UNAUTHENTICATED" errors on every login and API call.\n` +
+        `     Fix: Windows Settings → Time & Language → Date & Time → enable "Set time automatically" → click "Sync now".\n`
+      );
+    } else {
+      console.log("✅  System clock is in sync with real time.");
+    }
+  } catch {
+    // Network check failed — not critical, skip silently (DNS issues are already
+    // covered by diagnose-network.js).
+  }
+
+  // Definitively test whether the service account key itself is still valid
+  // by making a real authenticated Firestore call. This is the only way to
+  // tell "credential is dead" apart from "clock is wrong" — both produce the
+  // same 16 UNAUTHENTICATED error message, but only one is fixed by clock sync.
+  try {
+    const { db } = require("./config/firebase");
+    await db.collection("_credential_check").limit(1).get();
+    console.log("✅  Service account key is valid — Firestore Admin access confirmed.");
+  } catch (credErr) {
+    console.error(
+      `\n❌  SERVICE ACCOUNT KEY TEST FAILED.\n` +
+      `    This proves the problem is NOT the system clock — it's that\n` +
+      `    server/config/serviceAccountKey.json is no longer accepted by Google.\n` +
+      `    This happens when the key was deleted/rotated in Firebase Console\n` +
+      `    after this file was downloaded, or the file is corrupted/truncated.\n\n` +
+      `    Fix:\n` +
+      `      1. Go to Firebase Console → Project Settings → Service Accounts\n` +
+      `      2. Click "Generate new private key"\n` +
+      `      3. Replace server/config/serviceAccountKey.json with the downloaded file\n` +
+      `      4. Restart this server\n\n` +
+      `    Raw error: ${credErr.message}\n`
+    );
+  }
 });
