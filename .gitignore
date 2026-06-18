@@ -6,7 +6,12 @@ yarn-debug.log*
 yarn-error.log*
 firebase-debug.log*
 firebase-debug.*.log*
-
+# Google Cloud credentials
+*.json
+service-account*.json
+*-credentials.json
+*-key.json
+google-services.json
 # Firebase cache
 .firebase/
 

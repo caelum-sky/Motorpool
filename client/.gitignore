@@ -6,7 +6,12 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
-
+# Google Cloud credentials
+*.json
+service-account*.json
+*-credentials.json
+*-key.json
+google-services.json
 node_modules
 dist
 dist-ssr
