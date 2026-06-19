@@ -116,16 +116,32 @@ export default function VehiclesPage() {
 
       {/* Add/Edit Modal */}
       <Modal open={modal==="form"} onClose={()=>setModal(null)} title={editing?`Edit ${editing.plateNumber}`:"Add New Vehicle"} size="lg">
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Input label="Plate Number *" value={form.plateNumber} onChange={f("plateNumber")} placeholder="ABC 123"/>
           <Input label="Brand" value={form.brand} onChange={f("brand")} placeholder="Toyota"/>
           <Input label="Model *" value={form.model} onChange={f("model")} placeholder="HiAce Commuter" className="col-span-2"/>
           <Select label="Type *" value={form.type} onChange={f("type")}>
             {VEHICLE_TYPES.map(t=><option key={t} value={t} className="capitalize">{t}</option>)}
           </Select>
-          <Select label="Status" value={form.conditionStatus} onChange={f("conditionStatus")}>
-            {STATUSES.map(s=><option key={s} value={s} className="capitalize">{s}</option>)}
+          <Select
+            label="Status"
+            value={form.conditionStatus}
+            onChange={f("conditionStatus")}
+            disabled={form.conditionStatus === "maintenance"}
+          >
+            {STATUSES.map(s => (
+              <option key={s} value={s} disabled={s === "maintenance" && form.conditionStatus !== "maintenance"} className="capitalize">
+                {s}
+              </option>
+            ))}
           </Select>
+          {form.conditionStatus === "maintenance" && (
+            <p className="col-span-2 -mt-2 text-xs text-yellow-700 bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2">
+              This vehicle has an open maintenance job order, so its status is locked here. Go to the
+              <span className="font-medium"> Maintenance </span> page and mark that job order as completed (or delete it)
+              to release this vehicle back to Available.
+            </p>
+          )}
           <Input label="Engine Displacement" value={form.engineDisplacement} onChange={f("engineDisplacement")} placeholder="2.7L"/>
           <Input label="Current Odometer (km)" type="number" value={form.currentOdometer} onChange={f("currentOdometer")}/>
           <div className="col-span-2">

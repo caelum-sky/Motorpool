@@ -7,6 +7,10 @@ import {
   collection, doc, addDoc, getDoc, getDocs, updateDoc, deleteDoc,
   query, where, orderBy, limit, serverTimestamp, runTransaction,
 } from "firebase/firestore";
+import {
+  updateEmail, updatePassword, updateProfile as updateAuthProfile,
+  reauthenticateWithCredential, EmailAuthProvider,
+} from "firebase/auth";
 import { db, auth as clientAuth } from "./firebase";
 
 const col  = (name)     => collection(db, name);
@@ -21,6 +25,8 @@ function normalize(data) {
   return out;
 }
 
+import { getApiBaseUrl } from "./apiConfig";
+
 /**
  * authedFetch — calls the Express backend with the current user's
  * Firebase ID token attached. Used for operations that require the
@@ -29,7 +35,7 @@ function normalize(data) {
  */
 async function authedFetch(path, options = {}) {
   const token = await clientAuth.currentUser.getIdToken();
-  const res = await fetch(`/api${path}`, {
+  const res = await fetch(`${getApiBaseUrl()}${path}`, {
     ...options,
     headers: {
       "Content-Type": "application/json",
@@ -324,5 +330,112 @@ export const usersApi = {
   /** delete — Admin-only. Removes both the Auth account and Firestore profile. */
   async delete(uid) {
     return authedFetch(`/users/${uid}`, { method: "DELETE" });
+  },
+
+  // ── SELF-SERVICE PROFILE EDITING ──────────────────────────────────────────
+  // Every signed-in user can update their OWN name, photo, email, and
+  // password — these never touch other users' records and never go through
+  // the admin-only Express endpoints above.
+
+  /**
+   * uploadPhoto — resizes the chosen image down to a small avatar (max
+   * 256x256) entirely in the browser using a canvas, then returns it as a
+   * base64 data URL. This gets stored directly as a field on the user's
+   * Firestore document — no Firebase Storage needed, which matters because
+   * Storage requires linking a billing account (Blaze plan) even to stay
+   * within its free tier, while Firestore document fields are free up to
+   * 1MB each on the Spark plan already in use here. A resized 256x256 JPEG
+   * comfortably fits in a few hundred KB, well under that limit.
+   */
+  async uploadPhoto(uid, file) {
+    if (!file.type.startsWith("image/")) {
+      throw new Error("Please choose an image file (JPG, PNG, etc).");
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      throw new Error("Image is too large — please choose one under 8MB.");
+    }
+
+    const dataUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error("Could not read the selected file."));
+      reader.readAsDataURL(file);
+    });
+
+    const resized = await new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const MAX = 256;
+        let { width, height } = img;
+        if (width > height) {
+          if (width > MAX) { height = Math.round(height * (MAX / width)); width = MAX; }
+        } else {
+          if (height > MAX) { width = Math.round(width * (MAX / height)); height = MAX; }
+        }
+
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", 0.85));
+      };
+      img.onerror = () => reject(new Error("Could not process the selected image."));
+      img.src = dataUrl;
+    });
+
+    if (resized.length > 900_000) {
+      throw new Error("Image is still too large after resizing — please choose a simpler image.");
+    }
+
+    return resized;
+  },
+
+  /**
+   * updateProfile — updates the caller's own name / office / photo in
+   * Firestore, and mirrors the NAME onto the Firebase Auth profile too (so
+   * it shows up correctly anywhere Auth's own displayName is used). The
+   * photo is intentionally NOT mirrored to Auth — Auth's photoURL field
+   * expects a real URL and isn't meant to hold a base64 data string, which
+   * is what we're storing here since Firestore (not Storage) is doing the
+   * hosting. The Firestore copy is what every page in this app actually
+   * reads from, so functionality isn't affected.
+   */
+  async updateProfile(uid, { name, officeDepartment, photoURL }) {
+    const updates = {};
+    if (name !== undefined)             updates.name = name;
+    if (officeDepartment !== undefined) updates.officeDepartment = officeDepartment;
+    if (photoURL !== undefined)         updates.photoURL = photoURL;
+
+    await updateDoc(ref("users", uid), updates);
+
+    if (clientAuth.currentUser && name !== undefined) {
+      await updateAuthProfile(clientAuth.currentUser, { displayName: name });
+    }
+  },
+
+  /**
+   * reauthenticate — Firebase requires a recent sign-in before allowing
+   * email or password changes, as a security measure. This prompts for
+   * the current password and re-verifies it.
+   */
+  async reauthenticate(currentPassword) {
+    const user = clientAuth.currentUser;
+    if (!user) throw new Error("Not signed in.");
+    const credential = EmailAuthProvider.credential(user.email, currentPassword);
+    await reauthenticateWithCredential(user, credential);
+  },
+
+  /** updateOwnEmail — changes the caller's sign-in email (requires recent reauth). */
+  async updateOwnEmail(uid, newEmail) {
+    if (!clientAuth.currentUser) throw new Error("Not signed in.");
+    await updateEmail(clientAuth.currentUser, newEmail);
+    await updateDoc(ref("users", uid), { email: newEmail });
+  },
+
+  /** updateOwnPassword — changes the caller's sign-in password (requires recent reauth). */
+  async updateOwnPassword(newPassword) {
+    if (!clientAuth.currentUser) throw new Error("Not signed in.");
+    if (newPassword.length < 6) throw new Error("Password must be at least 6 characters.");
+    await updatePassword(clientAuth.currentUser, newPassword);
   },
 };

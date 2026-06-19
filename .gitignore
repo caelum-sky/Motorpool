@@ -14,7 +14,28 @@ service-account*.json
 google-services.json
 # Firebase cache
 .firebase/
+# Secrets — NEVER commit these
+server/config/serviceAccountKey.json
+server/.env
+client/.env
 
+# Dependencies
+node_modules/
+dist/
+.DS_Store
+
+# Capacitor native build artifacts — these are regenerated from `dist/` via
+# `npx cap sync`, so they don't need to be committed. The android/ and ios/
+# project FOLDERS themselves (capacitor.config.ts references, native
+# config, signing setup) generally SHOULD be committed — only their build
+# output shouldn't be.
+client/android/app/build/
+client/android/.gradle/
+client/android/local.properties
+client/android/app/release/
+client/ios/App/Pods/
+client/ios/App/build/
+client/ios/App/DerivedData/
 # Firebase config
 
 # Uncomment this if you'd like others to create their own Firebase project.

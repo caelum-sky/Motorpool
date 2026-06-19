@@ -22,7 +22,7 @@ export default function LoginPage() {
     try {
       await signInWithEmailAndPassword(auth, email, password);
       navigate("/dashboard");
-    } catch (err) {
+    } catch (err) { console.error("LOGIN_ERR:", err.code, err.message); console.error("LOGIN_ERR:", err.code, err.message);
       const messages = {
         "auth/user-not-found":   "No account found for this email.",
         "auth/wrong-password":   "Incorrect password.",

@@ -39,7 +39,7 @@ router.get("/:id", verifyToken, async (req, res) => {
 });
 
 // ── POST /api/vehicles ── create vehicle (admin, motorpool)
-router.post("/", verifyToken, requireRole("admin", "motorpool"), async (req, res) => {
+router.post("/", verifyToken, requireRole("admin", "motorpool", "driver"), async (req, res) => {
   try {
     const {
       plateNumber, brand, model, type, engineDisplacement,
@@ -73,11 +73,38 @@ router.post("/", verifyToken, requireRole("admin", "motorpool"), async (req, res
 });
 
 // ── PUT /api/vehicles/:id ── update vehicle (admin, motorpool)
-router.put("/:id", verifyToken, requireRole("admin", "motorpool"), async (req, res) => {
+router.put("/:id", verifyToken, requireRole("admin", "motorpool", "driver"), async (req, res) => {
   try {
     const updates = { ...req.body, updatedAt: FieldValue.serverTimestamp() };
     // Coerce numeric fields
     if (updates.currentOdometer !== undefined) updates.currentOdometer = Number(updates.currentOdometer);
+
+    if (updates.conditionStatus !== undefined) {
+      const vehicleDoc = await db.collection(COLLECTION).doc(req.params.id).get();
+      const currentStatus = vehicleDoc.exists ? vehicleDoc.data().conditionStatus : null;
+
+      // "maintenance" is set/cleared automatically by the maintenance job
+      // order system (server/routes/maintenance.js), never by directly
+      // editing the vehicle. This keeps one single source of truth instead
+      // of two systems that can silently disagree with each other.
+      const openJobs = await db.collection("maintenance_logs")
+        .where("vehicleId", "==", req.params.id)
+        .where("status", "in", ["open", "in_progress"])
+        .limit(1)
+        .get();
+      const hasOpenJob = !openJobs.empty;
+
+      if (updates.conditionStatus === "maintenance" && currentStatus !== "maintenance") {
+        return res.status(400).json({
+          error: "Vehicle status cannot be manually set to \"maintenance\" — create a job order from the Maintenance page instead.",
+        });
+      }
+      if (hasOpenJob && updates.conditionStatus !== "maintenance") {
+        return res.status(400).json({
+          error: "This vehicle has an open maintenance job order. Complete or delete that job order from the Maintenance page before changing its status.",
+        });
+      }
+    }
 
     await db.collection(COLLECTION).doc(req.params.id).update(updates);
     res.json({ id: req.params.id, ...updates });
@@ -103,7 +130,7 @@ router.patch("/:id/odometer", verifyToken, requireRole("admin", "motorpool", "dr
 });
 
 // ── DELETE /api/vehicles/:id ── admin only
-router.delete("/:id", verifyToken, requireRole("admin"), async (req, res) => {
+router.delete("/:id", verifyToken, requireRole("admin", "driver"), async (req, res) => {
   try {
     await db.collection(COLLECTION).doc(req.params.id).delete();
     res.json({ success: true });

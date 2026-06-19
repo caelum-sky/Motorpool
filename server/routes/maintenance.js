@@ -38,7 +38,7 @@ router.get("/:id", verifyToken, async (req, res) => {
 });
 
 // ── POST /api/maintenance ── create JOR (admin, motorpool)
-router.post("/", verifyToken, requireRole("admin", "motorpool"), async (req, res) => {
+router.post("/", verifyToken, requireRole("admin", "motorpool", "driver"), async (req, res) => {
   try {
     const {
       vehicleId, maintenanceType, jobDescription, datePerformed,
@@ -74,8 +74,11 @@ router.post("/", verifyToken, requireRole("admin", "motorpool"), async (req, res
       updatedAt:        FieldValue.serverTimestamp(),
     };
 
-    // If type is corrective/emergency, mark vehicle under maintenance
-    if (maintenanceType !== "preventive" && data.status !== "completed") {
+    // A vehicle is "under maintenance" whenever it has an OPEN job order
+    // attached to it, regardless of whether that job is preventive,
+    // corrective, or emergency — the type of work doesn't change the fact
+    // that the vehicle is unavailable for dispatch while work is happening.
+    if (data.status !== "completed") {
       await db.collection(VEHICLES).doc(vehicleId).update({
         conditionStatus: "maintenance",
         updatedAt: FieldValue.serverTimestamp(),
@@ -90,7 +93,7 @@ router.post("/", verifyToken, requireRole("admin", "motorpool"), async (req, res
 });
 
 // ── PUT /api/maintenance/:id ── update JOR (admin, motorpool)
-router.put("/:id", verifyToken, requireRole("admin", "motorpool"), async (req, res) => {
+router.put("/:id", verifyToken, requireRole("admin", "motorpool", "driver"), async (req, res) => {
   try {
     const updates = { ...req.body, updatedAt: FieldValue.serverTimestamp() };
 
@@ -105,14 +108,27 @@ router.put("/:id", verifyToken, requireRole("admin", "motorpool"), async (req, r
       updates.totalCost = partsCost + labor;
     }
 
-    // If marked completed, set vehicle back to available
+    // If marked completed, set vehicle back to available — but ONLY if
+    // there's no OTHER open job order still pending on that same vehicle.
+    // Without this check, completing one of two simultaneous job orders on
+    // the same vehicle would incorrectly release it while work is still
+    // ongoing under the other job order.
     if (updates.status === "completed") {
       const doc = await db.collection(COLLECTION).doc(req.params.id).get();
       if (doc.exists && doc.data().vehicleId) {
-        await db.collection(VEHICLES).doc(doc.data().vehicleId).update({
-          conditionStatus: "available",
-          updatedAt: FieldValue.serverTimestamp(),
-        });
+        const vehicleId = doc.data().vehicleId;
+        const otherOpenJobs = await db.collection(COLLECTION)
+          .where("vehicleId", "==", vehicleId)
+          .where("status", "in", ["open", "in_progress"])
+          .get();
+        const stillHasOpenWork = otherOpenJobs.docs.some((d) => d.id !== req.params.id);
+
+        if (!stillHasOpenWork) {
+          await db.collection(VEHICLES).doc(vehicleId).update({
+            conditionStatus: "available",
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+        }
       }
     }
 
@@ -124,8 +140,30 @@ router.put("/:id", verifyToken, requireRole("admin", "motorpool"), async (req, r
 });
 
 // ── DELETE /api/maintenance/:id ── admin only
-router.delete("/:id", verifyToken, requireRole("admin"), async (req, res) => {
+router.delete("/:id", verifyToken, requireRole("admin", "driver"), async (req, res) => {
   try {
+    const doc = await db.collection(COLLECTION).doc(req.params.id).get();
+    if (doc.exists) {
+      const { vehicleId, status } = doc.data();
+      // If this was an open job order, releasing it might mean the vehicle
+      // is no longer under maintenance — but only if nothing else open
+      // remains for that vehicle.
+      if (vehicleId && status !== "completed") {
+        const otherOpenJobs = await db.collection(COLLECTION)
+          .where("vehicleId", "==", vehicleId)
+          .where("status", "in", ["open", "in_progress"])
+          .get();
+        const stillHasOpenWork = otherOpenJobs.docs.some((d) => d.id !== req.params.id);
+
+        if (!stillHasOpenWork) {
+          await db.collection(VEHICLES).doc(vehicleId).update({
+            conditionStatus: "available",
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+        }
+      }
+    }
+
     await db.collection(COLLECTION).doc(req.params.id).delete();
     res.json({ success: true });
   } catch (err) {

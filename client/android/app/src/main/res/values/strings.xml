@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">BukSU Motorpool</string>
+    <string name="title_activity_main">BukSU Motorpool</string>
+    <string name="package_name">edu.buksu.motorpool</string>
+    <string name="custom_url_scheme">edu.buksu.motorpool</string>
+</resources>

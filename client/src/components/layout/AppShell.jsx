@@ -9,7 +9,7 @@
 //     backdrop instead of squeezing the page.
 
 import { useState } from "react";
-import { Outlet }   from "react-router-dom";
+import { Outlet, Link }   from "react-router-dom";
 import Sidebar       from "./Sidebar";
 import { useAuth }   from "../../context/AuthContext";
 import { Bell, Menu } from "lucide-react";
@@ -56,13 +56,15 @@ export default function AppShell() {
               {/* Notification dot — wire up to real data when needed */}
               <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full" />
             </button>
-            <div className="text-right hidden sm:block">
+            <Link to="/profile" className="text-right hidden sm:block hover:opacity-80 transition">
               <p className="text-sm font-medium text-gray-700">{userProfile?.name || "User"}</p>
               <p className="text-xs text-gray-400 capitalize">{userProfile?.role}</p>
-            </div>
-            <div className="w-8 h-8 rounded-full bg-buksu-maroon text-white flex items-center justify-center text-sm font-bold flex-shrink-0">
-              {(userProfile?.name || "U")[0].toUpperCase()}
-            </div>
+            </Link>
+            <Link to="/profile" className="w-8 h-8 rounded-full bg-buksu-maroon text-white flex items-center justify-center text-sm font-bold flex-shrink-0 overflow-hidden hover:opacity-80 transition">
+              {userProfile?.photoURL
+                ? <img src={userProfile.photoURL} alt="" className="w-full h-full object-cover" />
+                : (userProfile?.name || "U")[0].toUpperCase()}
+            </Link>
           </div>
         </header>
 

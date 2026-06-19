@@ -22,8 +22,30 @@ const PORT = process.env.PORT || 5000;
 
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.use(helmet());
+
+// Native mobile apps (Capacitor) make requests from special origins that
+// aren't real domains: "capacitor://localhost" on iOS and
+// "http://localhost" inside the Android WebView. These are added alongside
+// the configured web origin so both the website and the mobile apps can
+// reach this API. If you add a custom domain for the web app later, update
+// CLIENT_ORIGIN in .env rather than hardcoding it here.
+const allowedOrigins = [
+  process.env.CLIENT_ORIGIN || "http://localhost:5173",
+  "capacitor://localhost",
+  "http://localhost",
+  "ionic://localhost",
+];
+
 app.use(cors({
-  origin: process.env.CLIENT_ORIGIN || "http://localhost:5173",
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile native HTTP clients sometimes
+    // omit it entirely) and any origin in the allow-list above.
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error(`Origin ${origin} not allowed by CORS`));
+    }
+  },
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
   allowedHeaders: ["Content-Type", "Authorization"],
 }));
