@@ -1,9 +1,4 @@
 // src/components/layout/Sidebar.jsx
-// Responsive sidebar.
-//
-// isMobile=true  → off-canvas drawer. Hidden by default, slides in when
-//                   mobileOpen=true. Controlled by hamburger in AppShell.
-// isMobile=false → fixed visible sidebar, collapsible to icon-only width.
 
 import { NavLink, useNavigate } from "react-router-dom";
 import { signOut }              from "firebase/auth";
@@ -43,56 +38,88 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onCloseMobile
     (item) => item.roles.length === 0 || item.roles.includes(userProfile?.role)
   );
 
-  // ── Sidebar width / translate based on mode ─────────────────────────────
-  const sidebarWidth = isMobile ? 288 : collapsed ? 64 : 240; // px
-
-  // On mobile: slides off-canvas to the left when closed.
-  // On desktop: always visible; only width changes on collapse.
-  const translateX = isMobile && !mobileOpen ? -sidebarWidth : 0;
+  const sidebarWidth = isMobile ? 288 : collapsed ? 64 : 240;
+  const translateX   = isMobile && !mobileOpen ? -(sidebarWidth + 10) : 0;
 
   return (
     <>
-      {/* Backdrop — mobile only, tapping closes the drawer */}
+      {/* Full-screen backdrop — covers EVERYTHING including the right gap */}
       {isMobile && mobileOpen && (
         <div
           onClick={onCloseMobile}
-          className="fixed inset-0 bg-black/50 z-40"
-          style={{ touchAction: "none" }}
+          style={{
+            position:        "fixed",
+            inset:           0,
+            backgroundColor: "rgba(0,0,0,0.55)",
+            zIndex:          49,
+            // Extend backdrop above safe area so status bar area is also dimmed
+            top:             "-50px",
+            paddingTop:      "50px",
+          }}
         />
       )}
 
       <aside
         style={{
-          width:     sidebarWidth,
-          transform: `translateX(${translateX}px)`,
-          transition: "transform 0.22s ease, width 0.22s ease",
-          position:  "fixed",
-          top:       0,
-          left:      0,
-          height:    "100%",
-          zIndex:    50,
+          width:      sidebarWidth,
+          transform:  `translateX(${translateX}px)`,
+          transition: "transform 0.25s cubic-bezier(0.4,0,0.2,1)",
+          position:   "fixed",
+          // Start from absolute top (0), including behind status bar.
+          // The header inside adds paddingTop via safe-area env var.
+          top:        0,
+          left:       0,
+          bottom:     0,
+          zIndex:     50,
+          display:    "flex",
+          flexDirection: "column",
+          backgroundColor: "#7B1C1C",
+          boxShadow:  "4px 0 24px rgba(0,0,0,0.35)",
+          // Also extend below bottom safe area
+          paddingBottom: "env(safe-area-inset-bottom)",
         }}
-        className="flex flex-col bg-buksu-maroon text-white shadow-xl"
       >
-        {/* Header */}
+        {/* ── Header ─────────────────────────────────────────────────────── */}
         <div
-          className="flex items-center gap-3 px-4 py-5 border-b flex-shrink-0"
-          style={{ borderColor: "rgba(255,255,255,0.15)" }}
+          style={{
+            // Push header content below the device status bar
+            paddingTop:    "calc(env(safe-area-inset-top) + 16px)",
+            paddingBottom: "16px",
+            paddingLeft:   "16px",
+            paddingRight:  "16px",
+            borderBottom:  "1px solid rgba(255,255,255,0.15)",
+            flexShrink:    0,
+            display:       "flex",
+            alignItems:    "center",
+            gap:           "12px",
+          }}
         >
           <NavLink
             to="/dashboard"
             onClick={isMobile ? onCloseMobile : undefined}
-            className="flex items-center gap-3 flex-1 min-w-0 hover:opacity-80 transition-opacity"
+            style={{ display: "flex", alignItems: "center", gap: "12px", flex: 1, minWidth: 0, textDecoration: "none" }}
           >
-            <div className="flex-shrink-0 w-9 h-9 bg-buksu-gold rounded-lg flex items-center justify-center">
-              <Bus className="w-5 h-5 text-buksu-maroon-dark" />
+            <div style={{
+              flexShrink:      0,
+              width:           36,
+              height:          36,
+              backgroundColor: "#C9A227",
+              borderRadius:    "10px",
+              display:         "flex",
+              alignItems:      "center",
+              justifyContent:  "center",
+            }}>
+              <Bus size={20} color="#5A1313" />
             </div>
 
-            {/* Hide text when desktop-collapsed */}
             {(!collapsed || isMobile) && (
-              <div className="leading-tight overflow-hidden flex-1">
-                <p className="font-bold text-sm text-buksu-gold truncate">BukSU Motorpool</p>
-                <p className="text-[10px] text-white/60 truncate">PPMU Fleet System</p>
+              <div style={{ overflow: "hidden", flex: 1 }}>
+                <p style={{ fontWeight: 700, fontSize: "14px", color: "#C9A227", margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  BukSU Motorpool
+                </p>
+                <p style={{ fontSize: "10px", color: "rgba(255,255,255,0.5)", margin: 0 }}>
+                  PPMU Fleet System
+                </p>
               </div>
             )}
           </NavLink>
@@ -101,57 +128,94 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onCloseMobile
           {isMobile && (
             <button
               onClick={onCloseMobile}
-              className="p-1.5 rounded-lg hover:bg-white/10 flex-shrink-0"
+              style={{
+                flexShrink:      0,
+                padding:         "6px",
+                borderRadius:    "8px",
+                background:      "transparent",
+                border:          "none",
+                cursor:          "pointer",
+                color:           "rgba(255,255,255,0.7)",
+                display:         "flex",
+                alignItems:      "center",
+              }}
             >
-              <X className="w-5 h-5" />
+              <X size={20} />
             </button>
           )}
         </div>
 
-        {/* Navigation */}
-        <nav className="flex-1 py-3 overflow-y-auto">
+        {/* ── Navigation ─────────────────────────────────────────────────── */}
+        <nav style={{ flex: 1, overflowY: "auto", padding: "12px 0" }}>
           {visibleNav.map(({ label, path, icon: Icon }) => (
             <NavLink
               key={path}
               to={path}
               onClick={isMobile ? onCloseMobile : undefined}
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-4 py-3 mx-2 rounded-xl mb-0.5 transition-all text-sm font-medium
-                ${isActive
-                  ? "bg-buksu-gold text-buksu-maroon-dark shadow"
-                  : "text-white/80 hover:bg-white/10 hover:text-white"
-                }`
-              }
+              style={({ isActive }) => ({
+                display:        "flex",
+                alignItems:     "center",
+                gap:            "12px",
+                padding:        "12px 16px",
+                margin:         "2px 8px",
+                borderRadius:   "12px",
+                textDecoration: "none",
+                fontSize:       "14px",
+                fontWeight:     500,
+                transition:     "background 0.15s",
+                backgroundColor: isActive ? "#C9A227" : "transparent",
+                color:           isActive ? "#5A1313" : "rgba(255,255,255,0.8)",
+              })}
             >
-              <Icon className="w-5 h-5 flex-shrink-0" />
-              {/* Hide label when desktop-collapsed */}
+              <Icon size={20} style={{ flexShrink: 0 }} />
               {(!collapsed || isMobile) && (
-                <span className="truncate">{label}</span>
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {label}
+                </span>
               )}
             </NavLink>
           ))}
         </nav>
 
-        {/* User info + logout */}
-        <div
-          className="border-t p-3 flex-shrink-0"
-          style={{ borderColor: "rgba(255,255,255,0.15)" }}
-        >
+        {/* ── User info + logout ──────────────────────────────────────────── */}
+        <div style={{
+          borderTop: "1px solid rgba(255,255,255,0.15)",
+          padding:   "12px",
+          flexShrink: 0,
+        }}>
           {(!collapsed || isMobile) && (
-            <div className="mb-2 px-2 py-2 rounded-xl bg-white/10">
-              <p className="text-xs font-semibold text-white truncate">
+            <div style={{
+              marginBottom:    "8px",
+              padding:         "10px 12px",
+              borderRadius:    "12px",
+              backgroundColor: "rgba(255,255,255,0.1)",
+            }}>
+              <p style={{ fontSize: "13px", fontWeight: 600, color: "white", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {userProfile?.name || "User"}
               </p>
-              <p className="text-[10px] text-white/50 capitalize truncate">
+              <p style={{ fontSize: "10px", color: "rgba(255,255,255,0.5)", margin: 0, textTransform: "capitalize" }}>
                 {userProfile?.role} · {userProfile?.officeDepartment || "PPMU"}
               </p>
             </div>
           )}
           <button
             onClick={handleLogout}
-            className="flex items-center gap-2 w-full px-3 py-2.5 rounded-xl text-white/70 hover:bg-red-700/60 hover:text-white transition-colors text-sm"
+            style={{
+              display:         "flex",
+              alignItems:      "center",
+              gap:             "8px",
+              width:           "100%",
+              padding:         "10px 12px",
+              borderRadius:    "12px",
+              border:          "none",
+              background:      "transparent",
+              color:           "rgba(255,255,255,0.6)",
+              fontSize:        "14px",
+              cursor:          "pointer",
+              textAlign:       "left",
+            }}
           >
-            <LogOut className="w-4 h-4 flex-shrink-0" />
+            <LogOut size={16} style={{ flexShrink: 0 }} />
             {(!collapsed || isMobile) && <span>Sign Out</span>}
           </button>
         </div>
@@ -160,12 +224,26 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onCloseMobile
         {!isMobile && (
           <button
             onClick={onToggle}
-            style={{ right: -12, top: 76 }}
-            className="absolute bg-buksu-maroon border border-white/20 rounded-full p-1 text-white hover:bg-white/20 transition-colors shadow"
+            style={{
+              position:        "absolute",
+              right:           -12,
+              top:             80,
+              width:           24,
+              height:          24,
+              borderRadius:    "50%",
+              backgroundColor: "#7B1C1C",
+              border:          "1px solid rgba(255,255,255,0.2)",
+              color:           "white",
+              display:         "flex",
+              alignItems:      "center",
+              justifyContent:  "center",
+              cursor:          "pointer",
+              boxShadow:       "0 2px 6px rgba(0,0,0,0.3)",
+            }}
           >
             <ChevronRight
-              className="w-3.5 h-3.5 transition-transform"
-              style={{ transform: collapsed ? "rotate(0deg)" : "rotate(180deg)" }}
+              size={14}
+              style={{ transform: collapsed ? "rotate(0deg)" : "rotate(180deg)", transition: "transform 0.2s" }}
             />
           </button>
         )}

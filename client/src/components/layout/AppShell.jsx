@@ -1,9 +1,4 @@
 // src/components/layout/AppShell.jsx
-// Main layout: sidebar + top bar + content area.
-//
-// On native mobile (Capacitor): sidebar is always an off-canvas drawer,
-// opened via the hamburger button — no persistent sidebar, no md: breakpoints.
-// On desktop browser: sidebar is always visible and collapsible.
 
 import { useState, useEffect } from "react";
 import { Outlet, Link }        from "react-router-dom";
@@ -16,14 +11,13 @@ function isNativeMobile() {
 }
 
 export default function AppShell() {
-  const [collapsed,  setCollapsed]  = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const [isMobile,   setIsMobile]   = useState(false);
+  const [collapsed,       setCollapsed]       = useState(false);
+  const [mobileOpen,      setMobileOpen]      = useState(false);
+  const [isMobile,        setIsMobile]        = useState(false);
+  const [safeAreaTop,     setSafeAreaTop]     = useState(0);
   const { userProfile } = useAuth();
 
   useEffect(() => {
-    // Native Capacitor app always uses mobile drawer layout.
-    // On web, use window width to decide (matches the old md: breakpoint).
     const checkMobile = () => {
       setIsMobile(isNativeMobile() || window.innerWidth < 768);
     };
@@ -32,8 +26,23 @@ export default function AppShell() {
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
+  useEffect(() => {
+    // Read the actual safe area inset value for use in JS calculations.
+    // This is what env(safe-area-inset-top) resolves to at runtime.
+    const el = document.createElement("div");
+    el.style.cssText = "position:fixed;top:env(safe-area-inset-top,0px);height:1px;pointer-events:none;opacity:0;";
+    document.body.appendChild(el);
+    const val = parseFloat(getComputedStyle(el).top) || 0;
+    document.body.removeChild(el);
+    setSafeAreaTop(val);
+  }, []);
+
+  const sidebarWidth = isMobile ? 0 : collapsed ? 64 : 240;
+  // Header height: 56px content + status bar safe area
+  const headerHeight = 56 + safeAreaTop;
+
   return (
-    <div className="flex h-screen bg-gray-50 overflow-hidden">
+    <div style={{ display: "flex", height: "100vh", backgroundColor: "#f9fafb", overflow: "hidden" }}>
       <Sidebar
         collapsed={collapsed}
         onToggle={() => setCollapsed((c) => !c)}
@@ -42,59 +51,135 @@ export default function AppShell() {
         isMobile={isMobile}
       />
 
-      {/* Main content */}
-      <div
-        className="flex flex-col flex-1 min-w-0 transition-all duration-200"
-        style={{
-          marginLeft: isMobile ? 0 : collapsed ? 64 : 240,
-        }}
-      >
-        {/* Top bar */}
-        <header className="h-14 bg-white border-b border-gray-200 flex items-center justify-between px-3 shadow-sm flex-shrink-0">
-          <div className="flex items-center gap-2 min-w-0">
-            {/* Hamburger — always shown on mobile, hidden on desktop */}
+      {/* Main content — offset by sidebar width on desktop, full width on mobile */}
+      <div style={{
+        display:       "flex",
+        flexDirection: "column",
+        flex:          1,
+        minWidth:      0,
+        marginLeft:    sidebarWidth,
+        transition:    "margin-left 0.25s cubic-bezier(0.4,0,0.2,1)",
+      }}>
+
+        {/* ── Top bar ──────────────────────────────────────────────────── */}
+        <header style={{
+          height:          headerHeight,
+          backgroundColor: "white",
+          borderBottom:    "1px solid #e5e7eb",
+          display:         "flex",
+          alignItems:      "flex-end",  // content sits at the bottom of the bar
+          justifyContent:  "space-between",
+          paddingLeft:     "12px",
+          paddingRight:    "12px",
+          paddingBottom:   "8px",
+          // Reserve the top portion for the status bar
+          paddingTop:      safeAreaTop,
+          boxShadow:       "0 1px 3px rgba(0,0,0,0.08)",
+          flexShrink:      0,
+          zIndex:          30,
+          position:        "relative",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0 }}>
+            {/* Hamburger — only on mobile */}
             {isMobile && (
               <button
                 onClick={() => setMobileOpen(true)}
-                className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 flex-shrink-0"
+                style={{
+                  padding:         "8px",
+                  borderRadius:    "8px",
+                  border:          "none",
+                  background:      "transparent",
+                  cursor:          "pointer",
+                  color:           "#6b7280",
+                  display:         "flex",
+                  alignItems:      "center",
+                  flexShrink:      0,
+                }}
               >
-                <Menu className="w-5 h-5" />
+                <Menu size={22} />
               </button>
             )}
-            <div className="min-w-0">
-              <p className="text-[10px] text-gray-400 truncate hidden sm:block">
-                Bukidnon State University
-              </p>
-              <p className="text-xs font-semibold text-gray-700 truncate">
-                {isMobile ? "Motorpool" : "Physical Plant & Maintenance Unit — Motorpool Section"}
+            <div style={{ minWidth: 0 }}>
+              {!isMobile && (
+                <p style={{ fontSize: "10px", color: "#9ca3af", margin: 0 }}>
+                  Bukidnon State University
+                </p>
+              )}
+              <p style={{
+                fontSize:     isMobile ? "14px" : "13px",
+                fontWeight:   600,
+                color:        "#374151",
+                margin:       0,
+                overflow:     "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace:   "nowrap",
+              }}>
+                {isMobile ? "BukSU Motorpool" : "Physical Plant & Maintenance Unit — Motorpool Section"}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <button className="relative p-2 rounded-lg hover:bg-gray-100 text-gray-500">
-              <Bell className="w-4 h-4" />
-              <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-red-500 rounded-full" />
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
+            <button style={{
+              position:     "relative",
+              padding:      "8px",
+              borderRadius: "8px",
+              border:       "none",
+              background:   "transparent",
+              cursor:       "pointer",
+              color:        "#6b7280",
+              display:      "flex",
+            }}>
+              <Bell size={18} />
+              <span style={{
+                position:        "absolute",
+                top:             "6px",
+                right:           "6px",
+                width:           "7px",
+                height:          "7px",
+                backgroundColor: "#ef4444",
+                borderRadius:    "50%",
+              }} />
             </button>
+
             {!isMobile && (
-              <Link to="/profile" className="text-right hover:opacity-80 transition hidden sm:block">
-                <p className="text-sm font-medium text-gray-700">{userProfile?.name || "User"}</p>
-                <p className="text-xs text-gray-400 capitalize">{userProfile?.role}</p>
+              <Link to="/profile" style={{ textAlign: "right", textDecoration: "none" }}>
+                <p style={{ fontSize: "13px", fontWeight: 500, color: "#374151", margin: 0 }}>
+                  {userProfile?.name || "User"}
+                </p>
+                <p style={{ fontSize: "11px", color: "#9ca3af", margin: 0, textTransform: "capitalize" }}>
+                  {userProfile?.role}
+                </p>
               </Link>
             )}
+
             <Link
               to="/profile"
-              className="w-8 h-8 rounded-full bg-buksu-maroon text-white flex items-center justify-center text-sm font-bold flex-shrink-0 overflow-hidden hover:opacity-80 transition"
+              style={{
+                width:           "34px",
+                height:          "34px",
+                borderRadius:    "50%",
+                backgroundColor: "#7B1C1C",
+                color:           "white",
+                display:         "flex",
+                alignItems:      "center",
+                justifyContent:  "center",
+                fontSize:        "14px",
+                fontWeight:      700,
+                flexShrink:      0,
+                overflow:        "hidden",
+                textDecoration:  "none",
+              }}
             >
               {userProfile?.photoURL
-                ? <img src={userProfile.photoURL} alt="" className="w-full h-full object-cover" />
+                ? <img src={userProfile.photoURL} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                 : (userProfile?.name || "U")[0].toUpperCase()}
             </Link>
           </div>
         </header>
 
-        {/* Page content */}
-        <main className="flex-1 overflow-y-auto p-3 sm:p-5">
+        {/* ── Page content ─────────────────────────────────────────────── */}
+        <main style={{ flex: 1, overflowY: "auto", padding: isMobile ? "12px" : "20px" }}>
           <Outlet />
         </main>
       </div>
