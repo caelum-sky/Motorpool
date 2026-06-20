@@ -3,7 +3,9 @@
 import { useState, useEffect } from "react";
 import { Outlet, Link }        from "react-router-dom";
 import Sidebar                  from "./Sidebar";
+import NotificationPanel        from "../ui/NotificationPanel";
 import { useAuth }              from "../../context/AuthContext";
+import { useNotifications }     from "../../hooks/useNotifications";
 import { Bell, Menu }           from "lucide-react";
 
 function isNativeMobile() {
@@ -11,11 +13,18 @@ function isNativeMobile() {
 }
 
 export default function AppShell() {
-  const [collapsed,       setCollapsed]       = useState(false);
-  const [mobileOpen,      setMobileOpen]      = useState(false);
-  const [isMobile,        setIsMobile]        = useState(false);
-  const [safeAreaTop,     setSafeAreaTop]     = useState(0);
-  const { userProfile } = useAuth();
+  const [collapsed,    setCollapsed]    = useState(false);
+  const [mobileOpen,   setMobileOpen]   = useState(false);
+  const [isMobile,     setIsMobile]     = useState(false);
+  const [safeAreaTop,  setSafeAreaTop]  = useState(0);
+  const [showNotifs,   setShowNotifs]   = useState(false);
+
+  const { user, userProfile } = useAuth();
+  const { notifications, loading: notifsLoading, error: notifsError, refetch: refetchNotifs } =
+    useNotifications(user, userProfile);
+
+  // Count only high-priority unread for the badge
+  const unreadCount = notifications.filter(n => n.priority === "high").length;
 
   useEffect(() => {
     const checkMobile = () => {
@@ -27,8 +36,6 @@ export default function AppShell() {
   }, []);
 
   useEffect(() => {
-    // Read the actual safe area inset value for use in JS calculations.
-    // This is what env(safe-area-inset-top) resolves to at runtime.
     const el = document.createElement("div");
     el.style.cssText = "position:fixed;top:env(safe-area-inset-top,0px);height:1px;pointer-events:none;opacity:0;";
     document.body.appendChild(el);
@@ -38,7 +45,6 @@ export default function AppShell() {
   }, []);
 
   const sidebarWidth = isMobile ? 0 : collapsed ? 64 : 240;
-  // Header height: 56px content + status bar safe area
   const headerHeight = 56 + safeAreaTop;
 
   return (
@@ -51,7 +57,6 @@ export default function AppShell() {
         isMobile={isMobile}
       />
 
-      {/* Main content — offset by sidebar width on desktop, full width on mobile */}
       <div style={{
         display:       "flex",
         flexDirection: "column",
@@ -67,12 +72,11 @@ export default function AppShell() {
           backgroundColor: "white",
           borderBottom:    "1px solid #e5e7eb",
           display:         "flex",
-          alignItems:      "flex-end",  // content sits at the bottom of the bar
+          alignItems:      "flex-end",
           justifyContent:  "space-between",
           paddingLeft:     "12px",
           paddingRight:    "12px",
           paddingBottom:   "8px",
-          // Reserve the top portion for the status bar
           paddingTop:      safeAreaTop,
           boxShadow:       "0 1px 3px rgba(0,0,0,0.08)",
           flexShrink:      0,
@@ -80,20 +84,13 @@ export default function AppShell() {
           position:        "relative",
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0 }}>
-            {/* Hamburger — only on mobile */}
             {isMobile && (
               <button
                 onClick={() => setMobileOpen(true)}
                 style={{
-                  padding:         "8px",
-                  borderRadius:    "8px",
-                  border:          "none",
-                  background:      "transparent",
-                  cursor:          "pointer",
-                  color:           "#6b7280",
-                  display:         "flex",
-                  alignItems:      "center",
-                  flexShrink:      0,
+                  padding: "8px", borderRadius: "8px", border: "none",
+                  background: "transparent", cursor: "pointer",
+                  color: "#6b7280", display: "flex", alignItems: "center", flexShrink: 0,
                 }}
               >
                 <Menu size={22} />
@@ -106,13 +103,9 @@ export default function AppShell() {
                 </p>
               )}
               <p style={{
-                fontSize:     isMobile ? "14px" : "13px",
-                fontWeight:   600,
-                color:        "#374151",
-                margin:       0,
-                overflow:     "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace:   "nowrap",
+                fontSize: isMobile ? "14px" : "13px", fontWeight: 600,
+                color: "#374151", margin: 0, overflow: "hidden",
+                textOverflow: "ellipsis", whiteSpace: "nowrap",
               }}>
                 {isMobile ? "BukSU Motorpool" : "Physical Plant & Maintenance Unit — Motorpool Section"}
               </p>
@@ -120,26 +113,38 @@ export default function AppShell() {
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
-            <button style={{
-              position:     "relative",
-              padding:      "8px",
-              borderRadius: "8px",
-              border:       "none",
-              background:   "transparent",
-              cursor:       "pointer",
-              color:        "#6b7280",
-              display:      "flex",
-            }}>
+
+            {/* ── Notification bell ─────────────────────────────────────── */}
+            <button
+              onClick={() => { setShowNotifs(v => !v); if (!showNotifs) refetchNotifs(); }}
+              style={{
+                position: "relative", padding: "8px", borderRadius: "8px",
+                border: "none", background: showNotifs ? "#f3f4f6" : "transparent",
+                cursor: "pointer", color: "#6b7280", display: "flex", alignItems: "center",
+              }}
+            >
               <Bell size={18} />
-              <span style={{
-                position:        "absolute",
-                top:             "6px",
-                right:           "6px",
-                width:           "7px",
-                height:          "7px",
-                backgroundColor: "#ef4444",
-                borderRadius:    "50%",
-              }} />
+              {unreadCount > 0 && (
+                <span style={{
+                  position:        "absolute",
+                  top:             "4px",
+                  right:           "4px",
+                  minWidth:        unreadCount > 9 ? "16px" : "14px",
+                  height:          "14px",
+                  backgroundColor: "#ef4444",
+                  color:           "white",
+                  borderRadius:    "10px",
+                  fontSize:        "9px",
+                  fontWeight:      700,
+                  display:         "flex",
+                  alignItems:      "center",
+                  justifyContent:  "center",
+                  padding:         "0 3px",
+                  lineHeight:      1,
+                }}>
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </span>
+              )}
             </button>
 
             {!isMobile && (
@@ -156,19 +161,11 @@ export default function AppShell() {
             <Link
               to="/profile"
               style={{
-                width:           "34px",
-                height:          "34px",
-                borderRadius:    "50%",
-                backgroundColor: "#7B1C1C",
-                color:           "white",
-                display:         "flex",
-                alignItems:      "center",
-                justifyContent:  "center",
-                fontSize:        "14px",
-                fontWeight:      700,
-                flexShrink:      0,
-                overflow:        "hidden",
-                textDecoration:  "none",
+                width: "34px", height: "34px", borderRadius: "50%",
+                backgroundColor: "#7B1C1C", color: "white",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: "14px", fontWeight: 700, flexShrink: 0,
+                overflow: "hidden", textDecoration: "none",
               }}
             >
               {userProfile?.photoURL
@@ -183,6 +180,17 @@ export default function AppShell() {
           <Outlet />
         </main>
       </div>
+
+      {/* ── Notification panel (portal-style fixed overlay) ─────────────── */}
+      {showNotifs && (
+        <NotificationPanel
+          notifications={notifications}
+          loading={notifsLoading}
+          error={notifsError}
+          onClose={() => setShowNotifs(false)}
+          safeAreaTop={safeAreaTop}
+        />
+      )}
     </div>
   );
 }
