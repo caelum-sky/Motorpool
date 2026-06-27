@@ -1,33 +1,30 @@
 // src/utils/apiConfig.js
-// Resolves the correct backend base URL depending on where the app is
-// running. This matters because a native mobile app (via Capacitor) has
-// no "same origin" to be relative to — it always needs the FULL deployed
-// backend URL, unlike the web build which can use a relative /api path.
+// Resolves the correct backend base URL depending on where the app is running.
+//
+// ─── AFTER YOU DEPLOY THE BACKEND TO RENDER ───────────────────────────────────
+// 1. Copy your Render service URL (e.g. https://buksu-motorpool-api.onrender.com)
+// 2. Set PRODUCTION_API_URL below to that URL + "/api"
+// 3. Run npm run cap:android from the client/ folder to rebuild and sync
+// ─────────────────────────────────────────────────────────────────────────────
 
-// Set this to your deployed backend's public URL once it's live, e.g.
-// "https://buksu-motorpool-api.onrender.com/api"
-// Leave as-is during local development; the dev server values below cover that.
-export const PRODUCTION_API_URL = "https://YOUR-DEPLOYED-BACKEND-URL/api";
+// Replace this with your real Render URL after deployment:
+export const PRODUCTION_API_URL = "https://buksu-motorpool-api.onrender.com/api";
 
-// When testing the mobile app against your laptop's dev server over the
-// same WiFi network (before the backend is deployed), set this to your
-// laptop's LAN IP, e.g. "http://192.168.1.42:5000/api"
-// Find your IP with `ipconfig` (Windows) and look for "IPv4 Address".
-const LOCAL_NETWORK_API_URL = 'http://192.168.25.43:5000/api';
+// For testing on a real device BEFORE deployment (phone + laptop on same WiFi):
+// 1. Run `ipconfig` on your laptop, find "IPv4 Address" under your WiFi adapter
+// 2. Replace the IP below with your actual LAN IP (e.g. 192.168.1.42)
+// 3. Make sure server is running with npm run dev in server/
+export const LOCAL_NETWORK_API_URL = "http://YOUR_LAN_IP:5000/api";
 
 function isNativeMobile() {
-  // Capacitor injects this global on native iOS/Android builds.
   return typeof window !== "undefined" && !!window.Capacitor?.isNativePlatform?.();
 }
 
 export function getApiBaseUrl() {
   if (isNativeMobile()) {
-    // Native apps can never use a relative path — always need a full URL.
-    // Swap this to PRODUCTION_API_URL once the backend is deployed.
-    return LOCAL_NETWORK_API_URL;
+    // Switch to PRODUCTION_API_URL once your backend is deployed on Render
+    return PRODUCTION_API_URL;
   }
-
-  // Web (browser) — relative path works fine, handled by Vite's dev proxy
-  // locally and by same-origin hosting (or your own reverse proxy) in prod.
+  // Web browser — Vite proxy handles /api → localhost:5000 automatically
   return "/api";
 }

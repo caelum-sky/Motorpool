@@ -1,0 +1,29 @@
+# render.yaml
+# Render.com deployment configuration for BukSU Motorpool backend.
+# Commit this file to your repo, then connect it to Render for
+# automatic deploys on every git push.
+#
+# After first deploy, set these environment variables in Render dashboard
+# (Dashboard → your service → Environment):
+#
+#   FIREBASE_SERVICE_ACCOUNT  — paste the ENTIRE content of serviceAccountKey.json
+#   GMAIL_USER                — johndagooc2@gmail.com
+#   GMAIL_APP_PASSWORD        — eoznuondysbxqqeh
+#   CLIENT_ORIGIN             — https://your-frontend-url.com (or * while testing)
+
+services:
+  - type: web
+    name: buksu-motorpool-api
+    runtime: node
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      # Set the following in the Render dashboard — do NOT put secrets here:
+      # FIREBASE_SERVICE_ACCOUNT, GMAIL_USER, GMAIL_APP_PASSWORD, CLIENT_ORIGIN
+    healthCheckPath: /api/health
+    autoDeploy: true
