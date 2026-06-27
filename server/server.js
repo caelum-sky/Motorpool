@@ -23,37 +23,17 @@ const PORT = process.env.PORT || 5000;
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.use(helmet());
 
-// Native mobile apps (Capacitor) make requests from special origins that
-// aren't real domains: "capacitor://localhost" on iOS and
-// "http://localhost" inside the Android WebView. These are added alongside
-// the configured web origin so both the website and the mobile apps can
-// reach this API. If you add a custom domain for the web app later, update
-// CLIENT_ORIGIN in .env rather than hardcoding it here.
-const allowedOrigins = [
-  process.env.CLIENT_ORIGIN || "http://localhost:5173",
-  "capacitor://localhost",   // iOS Capacitor
-  "https://localhost",       // Android Capacitor WebView (serves over https)
-  "http://localhost",        // Android Capacitor (some versions)
-  "http://localhost:5173",   // Local web dev
-  "ionic://localhost",       // Ionic compatibility
-];
-
+// origin: true reflects whatever origin the client sends, unblocking all
+// origins including Capacitor's "https://localhost" on Android/iOS.
+// Tighten this to an explicit allowlist before going to production.
 app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      // Log the blocked origin so it's easy to add to the list
-      console.warn(`⚠️  CORS blocked origin: ${origin}`);
-      callback(new Error(`Origin ${origin} not allowed by CORS`));
-    }
-  },
+  origin: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: false,
 }));
 
-// Make sure OPTIONS preflight requests are always answered before auth middleware
+// Answer OPTIONS preflight before any auth middleware can reject it
 app.options("*", cors());
 app.use(morgan("dev"));
 app.use(express.json());
@@ -101,8 +81,7 @@ app.listen(PORT, async () => {
       console.log("✅  System clock is in sync with real time.");
     }
   } catch {
-    // Network check failed — not critical, skip silently (DNS issues are already
-    // covered by diagnose-network.js).
+    // Network check failed — not critical, skip silently.
   }
 
   // Definitively test whether the service account key itself is still valid
