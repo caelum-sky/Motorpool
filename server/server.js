@@ -31,24 +31,30 @@ app.use(helmet());
 // CLIENT_ORIGIN in .env rather than hardcoding it here.
 const allowedOrigins = [
   process.env.CLIENT_ORIGIN || "http://localhost:5173",
-  "capacitor://localhost",
-  "http://localhost",
-  "ionic://localhost",
+  "capacitor://localhost",   // iOS Capacitor
+  "https://localhost",       // Android Capacitor WebView (serves over https)
+  "http://localhost",        // Android Capacitor (some versions)
+  "http://localhost:5173",   // Local web dev
+  "ionic://localhost",       // Ionic compatibility
 ];
 
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (mobile native HTTP clients sometimes
-    // omit it entirely) and any origin in the allow-list above.
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
+      // Log the blocked origin so it's easy to add to the list
+      console.warn(`⚠️  CORS blocked origin: ${origin}`);
       callback(new Error(`Origin ${origin} not allowed by CORS`));
     }
   },
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: false,
 }));
+
+// Make sure OPTIONS preflight requests are always answered before auth middleware
+app.options("*", cors());
 app.use(morgan("dev"));
 app.use(express.json());
 
