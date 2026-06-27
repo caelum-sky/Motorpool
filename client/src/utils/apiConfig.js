@@ -8,7 +8,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Replace this with your real Render URL after deployment:
-export const PRODUCTION_API_URL = "https://motorpool-gllh.onrender.com";
+export const PRODUCTION_API_URL = "https://motorpool-gllh.onrender.com/api";
 
 // For testing on a real device BEFORE deployment (phone + laptop on same WiFi):
 // 1. Run `ipconfig` on your laptop, find "IPv4 Address" under your WiFi adapter
